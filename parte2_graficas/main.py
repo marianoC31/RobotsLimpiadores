@@ -4,7 +4,7 @@ Cada CUADROS_POR_PASO cuadros se ejecuta un paso del modelo; entre paso y paso,
 cada Robot3D anima su transición (girar, avanzar, recoger o apilar).
 
 Controles: arrastrar con el ratón = girar la cámara, rueda = zoom,
-Espacio = pausa, R = nueva simulación, Esc = salir.
+Espacio = pausa, R = nueva simulación, T = caras con textura sí/no, Esc = salir.
 """
 import os
 import sys
@@ -15,7 +15,7 @@ OpenGL.ERROR_CHECKING = False   # sin esto PyOpenGL revisa errores tras cada lla
 
 import math
 import pygame
-from pygame.locals import DOUBLEBUF, OPENGL, QUIT, KEYDOWN, K_ESCAPE, K_SPACE, K_r, MOUSEBUTTONDOWN, MOUSEBUTTONUP, MOUSEMOTION
+from pygame.locals import DOUBLEBUF, OPENGL, QUIT, KEYDOWN, K_ESCAPE, K_SPACE, K_r, K_t, MOUSEBUTTONDOWN, MOUSEBUTTONUP, MOUSEMOTION
 from OpenGL.GL import *
 
 from agentes.modelo import AlmacenModelo, PARAMETROS, DIRECCIONES, MAX_PILA
@@ -132,7 +132,9 @@ def lineas_panel(modelo, pausado):
         lineas.append(("Se alcanzó el tiempo máximo", (255, 170, 80)))
     elif pausado:
         lineas.append(("En pausa", (255, 215, 0)))
-    lineas.append(("Ratón: girar   Rueda: zoom   Espacio: pausa   R: reiniciar", (160, 180, 205)))
+    modo = "caras con textura + aristas" if superficies.activas else "solo aristas de Bresenham"
+    lineas.append((f"Modo: {modo}", (160, 180, 205)))
+    lineas.append(("Ratón: girar   Rueda: zoom   Espacio: pausa   R: reiniciar   T: caras", (160, 180, 205)))
     return lineas
 
 
@@ -163,6 +165,8 @@ def main():
                 pausado = not pausado
             if e.type == KEYDOWN and e.key == K_r:
                 escena = Escena()
+            if e.type == KEYDOWN and e.key == K_t:
+                superficies.activas = not superficies.activas
             if e.type == MOUSEBUTTONDOWN and e.button == 1:
                 arrastrando = True
             if e.type == MOUSEBUTTONUP and e.button == 1:
@@ -183,9 +187,10 @@ def main():
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         escena.render(camara, f)                 # transforma, proyecta y acumula aristas y caras
 
-        camara.cargar_en_opengl()                # 1) caras con textura, con nuestras matrices
         glEnable(GL_DEPTH_TEST)
-        superficies.dibujar()
+        if superficies.activas:                  # 1) caras con textura, con nuestras matrices (tecla T)
+            camara.cargar_en_opengl()
+            superficies.dibujar()
 
         glMatrixMode(GL_PROJECTION)              # 2) píxeles de Bresenham en coordenadas de ventana
         glLoadIdentity()

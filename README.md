@@ -30,7 +30,7 @@ RobotsLimpiadores/
 ## Cómo correr
 
 ```bash
-python run.py parte2          # almacén 3D (ratón: girar, rueda: zoom, Espacio: pausa, R: reiniciar)
+python run.py parte2          # almacén 3D (ratón: girar, rueda: zoom, Espacio: pausa, R: reiniciar, T: caras con textura sí/no)
 python run.py agentes 1       # solo la simulación, sin gráficos; imprime tiempo y movimientos
 ```
 

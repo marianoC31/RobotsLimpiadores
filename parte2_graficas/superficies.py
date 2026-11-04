@@ -21,6 +21,9 @@ ALFA_TRANSPARENTE = 0.28
 #   4(-x,-y,+z) 5(+x,-y,+z) 6(+x,+y,+z) 7(-x,+y,+z)
 CARAS_CAJA = ((0, 1, 2, 3), (5, 4, 7, 6), (4, 0, 3, 7), (1, 5, 6, 2), (3, 2, 6, 7), (4, 5, 1, 0))
 
+# Tecla T: con False solo queda el modelo de alambre de Bresenham (todo calculado por nosotros)
+activas = True
+
 _texturas = {}        # nombre -> id de textura en la tarjeta de video
 _caras = {}           # nombre -> [(vértices, uvs, color)]
 _transparentes = {}   # igual, pero se pintan semitransparentes al final
@@ -33,12 +36,16 @@ def cargar_texturas():
 
 
 def agregar_quad(textura, vertices, uvs, color, transparente=False):
+    if not activas:
+        return
     destino = _transparentes if transparente else _caras
     destino.setdefault(textura, []).append((vertices, uvs, color))
 
 
 def agregar_caja(textura, pts, color, orden=None):
     """Las 6 caras de una caja ya transformada (8 vértices en el orden de CARAS_CAJA)."""
+    if not activas:
+        return
     if orden is not None:
         pts = [pts[i] for i in orden]
     for cara in CARAS_CAJA:
