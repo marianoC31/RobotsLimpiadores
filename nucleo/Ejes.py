@@ -1,6 +1,6 @@
 # ejes.py
 import pygame
-from OpMat import OpMat3D
+from nucleo.OpMat import OpMat3D
 
 
 class Ejes:

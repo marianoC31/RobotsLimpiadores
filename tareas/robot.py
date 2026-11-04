@@ -1,10 +1,10 @@
 # robot.py  -- Robot limpiador (wireframe) usando OpMat3D, Camara y Bresenham
 import math
 import pygame
-from OpMat import OpMat3D
-from Bresenham import Bresenham
-from Camara import Camara
-from Ejes import Ejes
+from nucleo.OpMat import OpMat3D, matriz_Rx_T_Ry, matriz_T_Ry_Rx
+from nucleo.Bresenham import Bresenham
+from nucleo.Camara import Camara
+from nucleo.Ejes import Ejes
 
 ARISTAS_CAJA = [
     (0, 1), (1, 2), (2, 3), (3, 0),
@@ -216,12 +216,11 @@ class Robot:
         self.ejes.render(surface)
 
         op = self.op
-        op.reset()
 
-        # Vista (inclinación de cámara) -> posición y orientación global del robot
-        op.rotate_x(-25)
-        op.translate(self.pos_x, 0.5, self.pos_z)
-        op.rotate_y(self.rot_y)
+        # Vista (inclinación de cámara) -> posición y orientación global del robot.
+        # Equivale a reset(); rotate_x(-25); translate(...); rotate_y(...),
+        # pero con la matriz ya colapsada en una sola fórmula.
+        op.M = matriz_Rx_T_Ry(-25, self.pos_x, 0.5, self.pos_z, self.rot_y)
 
         # Chasis
         self._dibujar(surface, self.chasis_pts, self.chasis_edges)
@@ -232,20 +231,17 @@ class Robot:
         self._dibujar(surface, self.cabina_pts, self.cabina_edges)
         op.pop()
 
-        # Ruedas traseras (solo rodamiento)
-        for pos in [(-0.95, -0.1, -0.8), (0.95, -0.1, -0.8)]:
+        # Ruedas: T·Ry(dirección)·Rx(rodamiento) en una sola matriz.
+        # Las traseras no giran la dirección (phi = 0).
+        ruedas = [
+            ((-0.95, -0.1, -0.8), 0.0),
+            ((0.95, -0.1, -0.8), 0.0),
+            ((-0.95, -0.1, 0.8), self.steering_angle),
+            ((0.95, -0.1, 0.8), self.steering_angle),
+        ]
+        for pos, phi in ruedas:
             op.push()
-            op.translate(*pos)
-            op.rotate_x(self.wheel_spin)
-            self._dibujar(surface, self.wheel_pts, self.wheel_edges)
-            op.pop()
-
-        # Ruedas delanteras (dirección + rodamiento)
-        for pos in [(-0.95, -0.1, 0.8), (0.95, -0.1, 0.8)]:
-            op.push()
-            op.translate(*pos)
-            op.rotate_y(self.steering_angle)
-            op.rotate_x(self.wheel_spin)
+            op.multiplicar(matriz_T_Ry_Rx(*pos, phi, self.wheel_spin))
             self._dibujar(surface, self.wheel_pts, self.wheel_edges)
             op.pop()
 

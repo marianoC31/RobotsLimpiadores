@@ -1,4 +1,7 @@
 # main_robot.py
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto -> permite "import nucleo"
+
 import sys
 import pygame
 from robot import Robot

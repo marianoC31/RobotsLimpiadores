@@ -1,8 +1,8 @@
 import pygame
-from OpMat import OpMat3D
-from Bresenham import Bresenham
-from Camara import Camara
-from Ejes import Ejes
+from nucleo.OpMat import OpMat3D
+from nucleo.Bresenham import Bresenham
+from nucleo.Camara import Camara
+from nucleo.Ejes import Ejes
 
 
 class Piramide:
