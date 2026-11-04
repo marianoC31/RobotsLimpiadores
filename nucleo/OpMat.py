@@ -1,15 +1,11 @@
-"""OpMat3D unificado: una sola clase de matrices para TODO el proyecto.
+"""OpMat3D: matrices 4x4 de modelado (traslación, rotación, escala) con pila push/pop.
 
-Lo usan:
-  - tareas/   (pirámide y robot wireframe)         -> API: M, rotate_x, transform_points
-  - parte2_graficas/ (almacén 3D de la integradora) -> API: mat, rotateX, transform
-
-Ambas APIs son la misma matriz por dentro; los nombres de la Parte 2 son alias.
+Lo usa parte2_graficas/ para colocar robots, estantes y cajas.
+(rotateX/rotateY/rotateZ, mat y transform son alias de rotate_x, M y transform_points.)
 
 Modos de composición
-  post = False  ->  M = T · M   (cada transformación nueva se aplica "por fuera";
-                                 se lee en el orden en que la escribes: pirámide)
-  post = True   ->  M = M · T   (jerárquico: padre -> hijo, con push/pop; robots)
+  post = False  ->  M = T · M   (cada transformación nueva se aplica "por fuera")
+  post = True   ->  M = M · T   (jerárquico: padre -> hijo, con push/pop; así se usa en los robots)
 """
 import math
 

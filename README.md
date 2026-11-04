@@ -1,87 +1,55 @@
 # RobotsLimpiadores — TC2008B Actividad Integradora
 
-Un solo proyecto con las tareas previas y las dos partes de la integradora.
-Todas las piezas gráficas comparten la misma matemática en `nucleo/`.
+5 robots ordenan un almacén: recogen K cajas sueltas y las apilan en pilas de 5.
+La **simulación** la decide AgentPy (`agentes/`) y la **gráfica 3D** (`parte2_graficas/`)
+solo dibuja lo que decidió el modelo, con matemática propia (`nucleo/`).
 
 ```text
 RobotsLimpiadores/
-├── run.py                    # Lanzador único (ver "Cómo correr")
-├── requirements.txt          # pygame + PyOpenGL
+├── run.py                    # Lanzador único
+├── requirements.txt          # pygame, PyOpenGL, agentpy
 │
-├── nucleo/                   # Matemáticas compartidas por todo lo gráfico
-│   ├── OpMat.py              #   Matrices 4x4: translate/rotate/scale, push/pop,
-│   │                         #   matrices colapsadas (matriz_T_Ry, matriz_Rx_T_Ry, matriz_T_Ry_Rx)
-│   ├── Bresenham.py          #   Rasterizado de líneas píxel por píxel
-│   ├── Camara.py             #   Proyección en perspectiva 3D -> 2D (x·d/z)
-│   └── Ejes.py               #   Ejes X/Y/Z de referencia
+├── agentes/                  # MÓDULO EXTERNO DE AGENTES (AgentPy)
+│   └── modelo.py             #   RobotAgente (ap.Agent) y AlmacenModelo (ap.Model, ap.Grid)
 │
-├── tareas/                   # Tareas anteriores (base de todo lo demás)
-│   ├── piramide.py           #   Pivote + rotación (modo post=False: M = T·M)
-│   ├── robot.py              #   Robot jerárquico (modo post=True: M = M·T, push/pop)
-│   ├── main_piramide.py
-│   └── main_robot.py
+├── nucleo/                   # Matemáticas propias
+│   └── OpMat.py              #   traslación, rotación, escala, push/pop, matrices colapsadas
 │
-├── parte1_multiagentes/      # PARTE 1: simulación en cuadrícula MxN (sin gráficos 3D)
-│   ├── modelo_almacen.py     #   El mundo: matriz de cajas, matriz de robots, pilas, reservas
-│   ├── agente_robot.py       #   El agente: sensores, máquina de estados, BFS, estrategias
-│   ├── simulacion_visual.py  #   Vista 2D con pygame
-│   ├── simulacion_consola.py #   Vista en texto
-│   ├── experimentos.py       #   Compara BASE vs OPTIMIZADA con varias réplicas
-│   ├── main.py               #   Opciones de línea de comandos
-│   └── DOCUMENTO_ENTREGA_PARTE_1.md / .html   # Documento de entrega
+├── parte2_graficas/          # AMBIENTE 3D
+│   ├── main.py               #   ventana, ciclo: paso de AgentPy -> animación -> dibujo
+│   ├── robot3d.py            #   clase Robot3D: update() (animación) y render() (dibujo)
+│   ├── camara3d.py           #   proyección propia 3D -> pantalla (vista + perspectiva)
+│   ├── bresenham.py          #   clase Bresenham: líneas 2D píxel por píxel, con profundidad
+│   ├── superficies.py        #   caras con textura (mapeo UV)
+│   ├── almacen.py, estante.py, caja.py    # piso/paredes/puerta, estantes, pilas de cajas
+│   └── texturas.py, assets/  #   carga de imágenes
 │
-└── parte2_graficas/          # PARTE 2: almacén 3D con 5 robots
-    ├── main.py               #   Ventana, cámara orbital, HUD, ciclo principal
-    ├── almacen.py            #   Piso, paredes y puerta
-    ├── estante.py            #   Estantes generados por código (pasillos)
-    ├── caja.py               #   K cajas en piso / pilas de 5
-    ├── robot_limpiador.py    #   El mismo robot jerárquico de tareas/robot.py, más detallado
-    ├── gestor_robots.py      #   Rutas, velocidades aleatorias y colisiones
-    ├── iluminacion.py        #   Luz direccional + luz puntual (sirena) por robot
-    └── texturas.py, assets/  #   Texturas
+└── parte1_multiagentes/      # Versión 2D anterior de tu compañero (sin AgentPy)
 ```
 
 ## Cómo correr
 
-Usa el entorno `../.venv313` (ya tiene pygame y PyOpenGL). En VS Code:
-`Ctrl+Shift+P` → *Python: Select Interpreter* → `..\.venv313\Scripts\python.exe`.
-
 ```bash
-python run.py parte1                           # simulación 2D
-python run.py parte1 --consola -k 15 --semilla 1
-python run.py parte1 --experimentos            # BASE vs OPTIMIZADA
-python run.py parte2                           # almacén 3D
-python run.py robot                            # tarea del robot
-python run.py piramide                         # tarea de la pirámide
+python run.py parte2          # almacén 3D (ratón: girar, rueda: zoom, Espacio: pausa, R: reiniciar)
+python run.py agentes 1       # solo la simulación, sin gráficos; imprime tiempo y movimientos
 ```
 
-También funciona el botón ▶ de VS Code sobre cualquier `main*.py`.
+## Cómo cumple la rúbrica
 
-## Cómo se conecta todo
+| Dimensión | Dónde | Qué hay |
+|---|---|---|
+| **D1. Clase Robot y animación** | `parte2_graficas/robot3d.py` | `Robot3D.update(f)` anima (gira en su lugar, avanza entre celdas, baja brazos y cierra pinzas al recoger o apilar); `Robot3D.render(camara)` dibuja la jerarquía chasis → cabina, ruedas, brazos → pinzas → caja. |
+| **D2. OpMat y transformaciones** | `nucleo/OpMat.py` | Traslación, rotación, escala, pila `push/pop`, modo jerárquico. **Optimización:** multiplicación afín (36 multiplicaciones en lugar de 64), traslación colapsada y matrices cerradas `matriz_T_Ry` y `matriz_T_Ry_Rx`. |
+| **D3. Clase Bresenham y proyección** | `parte2_graficas/bresenham.py`, `camara3d.py` | Proyección propia: `P·V` se colapsa una vez por cuadro y cada punto cuesta 4 productos punto. Da los mismos resultados que `gluProject` (diferencia de 10⁻¹³). La clase `Bresenham` rasteriza cada arista píxel por píxel con `linea()`; OpenGL solo pinta los puntos ya calculados. |
+| **D4. Ambiente gráfico y AgentPy** | `agentes/modelo.py` + `parte2_graficas/main.py` | El movimiento lo decide `AlmacenModelo` (AgentPy) con `sim_setup()` y `sim_step()`; cada paso, los `Robot3D` leen la posición, la orientación y la acción de su agente y la animan. |
 
-**Una sola idea, tres tamaños:**
+Las caras sólidas con textura (piso, paredes, puerta, repisas, cajas y robots) se pintan con
+OpenGL usando **las matrices de `camara3d.py`**, debajo de las aristas de Bresenham.
 
-| Concepto | tareas/ | parte2_graficas/ | parte1_multiagentes/ |
-|---|---|---|---|
-| Robot | `robot.py` (1 robot, teclado) | `robot_limpiador.py` ×5 | `agente_robot.py` ×5 |
-| Posición | `pos_x, pos_z` continuos | `pos_x, pos_z` continuos | `x, y` celdas enteras |
-| Movimiento | óvalo fijo o teclado | waypoints por pasillos | BFS hacia la caja/pila |
-| Matriz del cuerpo | `matriz_Rx_T_Ry` (incluye la vista) | `matriz_T_Ry` (la vista la pone OpenGL) | — |
-| Ruedas | `matriz_T_Ry_Rx` | `matriz_T_Ry_Rx` | — |
-| Brazos/pinzas | push → translate → rotate → pop | igual | `lleva_caja` (sensor de presión) |
+## Los agentes (agentes/modelo.py)
 
-**Diferencia clave entre las dos partes gráficas:**
-- `tareas/` proyecta con **tu** `Camara.py` (`x·d/z`) y dibuja con `Bresenham.linea` sobre una superficie de pygame.
-- `parte2_graficas/` usa **tu mismo OpMat** para mover los objetos, pero proyecta con `gluProject` de OpenGL (cámara orbital con `gluLookAt`) y dibuja con `bresenham_2d` (puntos `GL_POINTS`).
-
-**Las partes 1 y 2 no están conectadas** (el PDF dice que no es necesario).
-Si algún día se conectan: la celda `(x, y)` de la Parte 1 equivale al punto
-`(x - M/2, 0, y - N/2)` del piso en la Parte 2.
-
-## Orden sugerido para estudiarlo
-
-1. `nucleo/OpMat.py`: entender `post=False` contra `post=True` y por qué las matrices colapsadas dan lo mismo.
-2. `tareas/robot.py`: la jerarquía del robot.
-3. `parte2_graficas/robot_limpiador.py`: el mismo robot, ahora instanciable 5 veces.
-4. `parte2_graficas/gestor_robots.py`: rutas y colisiones.
-5. `parte1_multiagentes/modelo_almacen.py` y luego `agente_robot.py`: el problema lógico.
+- Cuadrícula M × N (el borde es pared), K cajas sueltas al inicio, 4 estantes como obstáculos y 5 robots en celdas vacías aleatorias.
+- **Sensores:** las 4 celdas vecinas (libre, pared, estante, cajas y cuántas, robot) y el sensor de presión (`lleva_caja`).
+- **Acciones:** moverse a una celda vecina, recoger una caja vecina o dejarla en una pila vecina (máximo 5).
+- **Estrategia cooperativa:** cada robot reserva su caja, para que dos robots no vayan por la misma; lleva la caja a la pila abierta más alta, para cerrar pilas de 5 cuanto antes; usa BFS para el camino más corto.
+- **Métricas:** pasos hasta que todas las cajas están en pilas y movimientos totales. En 20 semillas terminó siempre, con 58 pasos y 252 movimientos en promedio.

@@ -1,150 +1,102 @@
-from OpenGL.GL import *
-from OpenGL.GLU import *
-from robot_limpiador import bresenham_2d
+"""Almacén: piso, paredes y puerta, construidos a partir de la cuadrícula del modelo.
+
+La cuadrícula de AgentPy tiene M x N celdas y su borde es pared, así que el piso
+caminable son las (M-2) x (N-2) celdas interiores.  Cada celda mide TAM_CELDA m.
+"""
+import math
+import superficies
+
+TAM_CELDA = 2.0
+COLOR_PISO = (0.35, 0.38, 0.42)
+COLOR_PARED = (0.55, 0.60, 0.66)
+COLOR_PUERTA = (0.30, 0.65, 0.95)
+BLANCO = (1.0, 1.0, 1.0)
+
 
 class Almacen:
-    """
-    Modelo 3D del Almacén de dimensiones M x N espacios:
-    - Piso: Rejilla de celdas con líneas de seguridad amarillas que delimitan los pasillos.
-    - Paredes: Muros perimetrales Norte, Oeste, Este y Sur con zócalos.
-    - Puerta: Portón seccional industrial en la pared Sur con franjas de advertencia.
-    - Renderizado exclusivamente mediante proyección 3D->2D y algoritmo bresenham_2d.
-    - Iluminación matemática calculada en Python.
-    """
-    def __init__(self, m=20.0, n=20.0, altura=4.0):
-        self.m = float(m)
-        self.n = float(n)
-        self.altura = float(altura)
 
-        self.ancho_puerta = 3.6
-        self.alto_puerta = 3.2
-
+    def __init__(self, M, N, bresenham, altura=4.0, ancho_puerta=3.6, alto_puerta=3.2):
+        self.M, self.N = M, N
+        self.bresenham = bresenham
+        self.hx = (M - 2) * TAM_CELDA / 2.0      # medio ancho del piso interior
+        self.hz = (N - 2) * TAM_CELDA / 2.0
+        self.altura = altura
+        self.pw, self.ph = ancho_puerta / 2.0, alto_puerta
         self._crear_geometria()
 
+    def centro_celda(self, x, y):
+        """Celda (x, y) de la cuadrícula -> punto (x, z) del mundo."""
+        return ((x - self.M / 2.0 + 0.5) * TAM_CELDA, (y - self.N / 2.0 + 0.5) * TAM_CELDA)
+
     def _crear_geometria(self):
-        hx = self.m / 2.0
-        hz = self.n / 2.0
-        h = self.altura
-
-        # 1. PISO: Cuadrícula de Celdas (Espacios M x N)
-        self.piso_lineas = []
-        # Líneas a lo largo de X (paralelas a X)
-        paso_z = 2.0
-        z = -hz
-        while z <= hz + 1e-4:
-            self.piso_lineas.append(([-hx, 0.0, z], [hx, 0.0, z]))
-            z += paso_z
-
-        # Líneas a lo largo de Z (paralelas a Z)
-        paso_x = 2.0
+        hx, hz, h, pw, ph = self.hx, self.hz, self.altura, self.pw, self.ph
+        # Piso: una línea por cada borde de celda
+        self.piso = []
         x = -hx
-        while x <= hx + 1e-4:
-            self.piso_lineas.append(([x, 0.0, -hz], [x, 0.0, hz]))
-            x += paso_x
+        while x <= hx + 1e-6:
+            self.piso.append(([x, 0.0, -hz], [x, 0.0, hz]))
+            x += TAM_CELDA
+        z = -hz
+        while z <= hz + 1e-6:
+            self.piso.append(([-hx, 0.0, z], [hx, 0.0, z]))
+            z += TAM_CELDA
+        # Paredes: contorno superior y columnas de las esquinas
+        esquinas = [(-hx, -hz), (hx, -hz), (hx, hz), (-hx, hz)]
+        self.paredes = []
+        for i, (xa, za) in enumerate(esquinas):
+            xb, zb = esquinas[(i + 1) % 4]
+            self.paredes.append(([xa, h, za], [xb, h, zb]))
+            self.paredes.append(([xa, 0.0, za], [xa, h, za]))
+        # Puerta en la pared sur (z = +hz)
+        self.puerta = [([-pw, 0.0, hz], [-pw, ph, hz]), ([pw, 0.0, hz], [pw, ph, hz]),
+                       ([-pw, ph, hz], [pw, ph, hz]),
+                       ([-pw, 0.8, hz], [pw, 0.8, hz]), ([-pw, 1.6, hz], [pw, 1.6, hz]),
+                       ([-pw, 2.4, hz], [pw, 2.4, hz])]
 
-        # 2. DEMARCACIONES DE SEGURIDAD EN PASILLOS (Líneas amarillas)
-        self.demarcaciones = [
-            # Pasillo Oeste (X = -5.8)
-            ([-5.8, 0.01, -hz + 1.5], [-5.8, 0.01, hz - 1.5]),
-            # Pasillo Central Carril Izquierdo (X = -2.6)
-            ([-2.6, 0.01, -hz + 1.5], [-2.6, 0.01, hz - 1.5]),
-            # Pasillo Central Carril Derecho (X = +2.6)
-            ([ 2.6, 0.01, -hz + 1.5], [ 2.6, 0.01, hz - 1.5]),
-            # Pasillo Este (X = +5.8)
-            ([ 5.8, 0.01, -hz + 1.5], [ 5.8, 0.01, hz - 1.5]),
-            # Pasillos transversales Norte y Sur
-            ([-hx + 1.5, 0.01, -6.8], [hx - 1.5, 0.01, -6.8]),
-            ([-hx + 1.5, 0.01,  6.8], [hx - 1.5, 0.01,  6.8]),
-            # Recuadro de bahía de carga frente a la puerta
-            ([-self.ancho_puerta/2.0 - 0.4, 0.01, hz - 2.5], [ self.ancho_puerta/2.0 + 0.4, 0.01, hz - 2.5]),
-            ([-self.ancho_puerta/2.0 - 0.4, 0.01, hz],       [-self.ancho_puerta/2.0 - 0.4, 0.01, hz - 2.5]),
-            ([ self.ancho_puerta/2.0 + 0.4, 0.01, hz],       [ self.ancho_puerta/2.0 + 0.4, 0.01, hz - 2.5])
-        ]
+    def _lineas(self, camara, lineas, color):
+        pts = [p for linea in lineas for p in linea]
+        self.bresenham.dibujar_aristas(camara, pts, [(2 * i, 2 * i + 1) for i in range(len(lineas))], color)
 
-        # 3. PAREDES PERIMETRALES
-        self.pared_lineas = [
-            # Base del almacén
-            ([-hx, 0.0, -hz], [ hx, 0.0, -hz]),
-            ([ hx, 0.0, -hz], [ hx, 0.0,  hz]),
-            ([-hx, 0.0,  hz], [-hx, 0.0, -hz]),
-            # Techo / Corona de muros
-            ([-hx, h, -hz], [ hx, h, -hz]),
-            ([ hx, h, -hz], [ hx, h,  hz]),
-            ([ hx, h,  hz], [-hx, h,  hz]),
-            ([-hx, h,  hz], [-hx, h, -hz]),
-            # Columnas en las 4 esquinas
-            ([-hx, 0.0, -hz], [-hx, h, -hz]),
-            ([ hx, 0.0, -hz], [ hx, h, -hz]),
-            ([ hx, 0.0,  hz], [ hx, h,  hz]),
-            ([-hx, 0.0,  hz], [-hx, h,  hz]),
-            # Zócalo perimetral (a 0.5m de altura)
-            ([-hx, 0.5, -hz], [ hx, 0.5, -hz]),
-            ([ hx, 0.5, -hz], [ hx, 0.5,  hz]),
-            ([-hx, 0.5,  hz], [-hx, 0.5, -hz]),
-            # Pared Sur dividida
-            ([-hx, 0.0, hz], [-self.ancho_puerta/2.0, 0.0, hz]),
-            ([ self.ancho_puerta/2.0, 0.0, hz], [hx, 0.0, hz]),
-            ([-hx, 0.5, hz], [-self.ancho_puerta/2.0, 0.5, hz]),
-            ([ self.ancho_puerta/2.0, 0.5, hz], [hx, 0.5, hz])
-        ]
+    def render(self, camara):
+        hx, hz, h, pw, ph = self.hx, self.hz, self.altura, self.pw, self.ph
+        T = TAM_CELDA
 
-        # 4. PUERTA SECCIONAL EN PARED SUR
-        pw = self.ancho_puerta / 2.0
-        ph = self.alto_puerta
-        self.puerta_lineas = [
-            # Marco de la puerta
-            ([-pw, 0.0, hz], [-pw, ph, hz]),
-            ([ pw, 0.0, hz], [ pw, ph, hz]),
-            ([-pw, ph, hz],  [ pw, ph, hz]),
-            # Dintel superior hacia el techo
-            ([-pw, ph, hz], [-pw, h, hz]),
-            ([ pw, ph, hz], [ pw, h, hz]),
-            # Paneles seccionales horizontales
-            ([-pw, 0.8, hz], [pw, 0.8, hz]),
-            ([-pw, 1.6, hz], [pw, 1.6, hz]),
-            ([-pw, 2.4, hz], [pw, 2.4, hz]),
-            # Manija / cerradura
-            ([pw - 0.4, 1.2, hz], [pw - 0.2, 1.2, hz])
-        ]
+        # ---- Aristas (Bresenham) ----
+        self._lineas(camara, self.piso, COLOR_PISO)
+        self._lineas(camara, self.paredes, COLOR_PARED)
+        self._lineas(camara, self.puerta, COLOR_PUERTA)
 
-    def render(self, mv, proj, vp, iluminacion, robots):
-        """Dibuja todo el almacén proyectado a 2D y rasterizado con Bresenham."""
-        # 1. PISO (Rejilla de celdas en gris tenue)
-        col_piso = (0.35, 0.38, 0.42)
-        for p1, p2 in self.piso_lineas:
-            mid = ((p1[0]+p2[0])*0.5, (p1[1]+p2[1])*0.5, (p1[2]+p2[2])*0.5)
-            c = iluminacion.calcular_color(col_piso, mid, (0.0, 1.0, 0.0), robots)
-            glColor3f(*c)
-            wx1, wy1, _ = gluProject(*p1, mv, proj, vp)
-            wx2, wy2, _ = gluProject(*p2, mv, proj, vp)
-            bresenham_2d(wx1, wy1, wx2, wy2)
+        # ---- Caras con textura ----
+        # Piso: una baldosa por celda (UV 0..1 cada una)
+        x = -hx
+        while x < hx - 1e-6:
+            z = -hz
+            while z < hz - 1e-6:
+                superficies.agregar_quad("piso", [[x, 0, z], [x + T, 0, z], [x + T, 0, z + T], [x, 0, z + T]],
+                                         superficies.UV_CARA, BLANCO)
+                z += T
+            x += T
 
-        # 2. DEMARCACIONES AMARILLAS DE PASILLOS
-        col_amarillo = (0.92, 0.75, 0.10)
-        for p1, p2 in self.demarcaciones:
-            mid = ((p1[0]+p2[0])*0.5, (p1[1]+p2[1])*0.5, (p1[2]+p2[2])*0.5)
-            c = iluminacion.calcular_color(col_amarillo, mid, (0.0, 1.0, 0.0), robots)
-            glColor3f(*c)
-            wx1, wy1, _ = gluProject(*p1, mv, proj, vp)
-            wx2, wy2, _ = gluProject(*p2, mv, proj, vp)
-            bresenham_2d(wx1, wy1, wx2, wy2)
-
-        # 3. PAREDES PERIMETRALES (Líneas de muros y zócalo)
-        col_pared = (0.55, 0.60, 0.66)
-        for p1, p2 in self.pared_lineas:
-            mid = ((p1[0]+p2[0])*0.5, (p1[1]+p2[1])*0.5, (p1[2]+p2[2])*0.5)
-            c = iluminacion.calcular_color(col_pared, mid, (0.0, 0.5, 0.5), robots)
-            glColor3f(*c)
-            wx1, wy1, _ = gluProject(*p1, mv, proj, vp)
-            wx2, wy2, _ = gluProject(*p2, mv, proj, vp)
-            bresenham_2d(wx1, wy1, wx2, wy2)
-
-        # 4. PUERTA SECCIONAL (Metálica azul / seguridad)
-        col_puerta = (0.30, 0.65, 0.95)
-        for p1, p2 in self.puerta_lineas:
-            mid = ((p1[0]+p2[0])*0.5, (p1[1]+p2[1])*0.5, (p1[2]+p2[2])*0.5)
-            c = iluminacion.calcular_color(col_puerta, mid, (0.0, 0.0, -1.0), robots)
-            glColor3f(*c)
-            wx1, wy1, _ = gluProject(*p1, mv, proj, vp)
-            wx2, wy2, _ = gluProject(*p2, mv, proj, vp)
-            bresenham_2d(wx1, wy1, wx2, wy2)
+        # Paredes en tramos de 2 m (v = altura / 2 para que la textura no se estire).
+        # Vista desde afuera, una pared se pinta semitransparente para no tapar el almacén.
+        ox, _, oz = camara.ojo
+        paredes = [((-hx, -hz), (hx, -hz), (0, 1)),    # norte (normal hacia adentro: +z)
+                   ((-hx, hz), (-hx, -hz), (1, 0)),    # oeste
+                   ((hx, -hz), (hx, hz), (-1, 0)),     # este
+                   ((hx, hz), (pw, hz), (0, -1)),      # sur, a la derecha de la puerta
+                   ((-pw, hz), (-hx, hz), (0, -1))]    # sur, a la izquierda de la puerta
+        for (x1, z1), (x2, z2), (nx, nz) in paredes:
+            transparente = (ox - x1) * nx + (oz - z1) * nz <= 0
+            pasos = max(1, round(math.hypot(x2 - x1, z2 - z1) / T))
+            for i in range(pasos):
+                a, b = i / pasos, (i + 1) / pasos
+                xa, za = x1 + (x2 - x1) * a, z1 + (z2 - z1) * a
+                xb, zb = x1 + (x2 - x1) * b, z1 + (z2 - z1) * b
+                superficies.agregar_quad("pared", [[xa, 0, za], [xb, 0, zb], [xb, h, zb], [xa, h, za]],
+                                         ((0, 0), (1, 0), (1, h / T), (0, h / T)), BLANCO, transparente)
+        sur_transparente = oz >= hz
+        superficies.agregar_quad("pared", [[pw, ph, hz], [-pw, ph, hz], [-pw, h, hz], [pw, h, hz]],
+                                 ((0, 0), (pw, 0), (pw, (h - ph) / T), (0, (h - ph) / T)), BLANCO, sur_transparente)
+        zp = hz - 0.02
+        superficies.agregar_quad("puerta", [[pw, 0, zp], [-pw, 0, zp], [-pw, ph, zp], [pw, ph, zp]],
+                                 superficies.UV_CARA, BLANCO, sur_transparente)
