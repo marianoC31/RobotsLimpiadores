@@ -1,69 +1,73 @@
+"""TC2008B - Actividad Integradora: Parte 1 (Sistemas Multiagentes)
+
+Ejecución de la simulación multiagente con AgentPy:
+5 robots omnidireccionales organizan un almacén de M x N celdas:
+recogen K cajas a nivel de piso y las apilan en grupos de máximo 5.
+
+Uso:
+    python main.py [semilla]
+    (O desde la raíz: python run.py parte1)
+"""
+import os
 import sys
-import argparse
-from simulacion_visual import ejecutar_simulacion_visual
-from simulacion_consola import ejecutar_simulacion_consola
-from experimentos import ejecutar_bateria_experimentos
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="TC2008B - Parte 1: Simulación de Sistemas Multiagentes (Almacén Autónomo)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    parser.add_argument("--consola", action="store_true", help="Ejecutar en modo consola interactiva ASCII sin ventana gráfica")
-    parser.add_argument("--experimentos", action="store_true", help="Ejecutar batería de experimentación científica Monte Carlo (SICT0102)")
-    parser.add_argument("--estrategia", type=str, choices=['BASE', 'OPTIMIZADA'], default='OPTIMIZADA', help="Estrategia cooperativa de los robots")
-    parser.add_argument("-m", type=int, default=14, help="Ancho del almacén en celdas")
-    parser.add_argument("-n", type=int, default=14, help="Largo del almacén en celdas")
-    parser.add_argument("-k", type=int, default=25, help="Cantidad de cajas iniciales a nivel de piso")
-    parser.add_argument("--robots", type=int, default=5, help="Cantidad de robots en la flota")
-    parser.add_argument("--pasos", type=int, default=1000, help="Límite máximo de pasos de simulación")
-    parser.add_argument("--semilla", type=int, default=None, help="Semilla pseudoaleatoria para reproducibilidad")
-    parser.add_argument("--replicas", type=int, default=20, help="Número de réplicas pareadas para el modo experimentos")
+# Permitir importar agentes desde la raíz del proyecto
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if RAIZ not in sys.path:
+    sys.path.insert(0, RAIZ)
 
-    args = parser.parse_args()
+from agentes.modelo import AlmacenModelo, PARAMETROS, MAX_PILA
 
-    if args.experimentos:
-        ejecutar_bateria_experimentos(
-            dimensiones=(args.m, args.n),
-            valores_k=(15, 25, 40),
-            num_robots=args.robots,
-            num_replicas=args.replicas,
-            max_pasos=args.pasos
-        )
-    elif args.consola:
-        ejecutar_simulacion_consola(
-            m=args.m,
-            n=args.n,
-            k=args.k,
-            num_robots=args.robots,
-            max_pasos=args.pasos,
-            estrategia=args.estrategia,
-            semilla=args.semilla,
-            animado=True
-        )
-    else:
-        try:
-            ejecutar_simulacion_visual(
-                m=args.m,
-                n=args.n,
-                k=args.k,
-                num_robots=args.robots,
-                max_pasos=args.pasos,
-                estrategia=args.estrategia,
-                semilla=args.semilla
-            )
-        except Exception as e:
-            print(f"\n⚠️  No se pudo abrir la ventana gráfica de Pygame ({e}). Ejecutando en consola...")
-            ejecutar_simulacion_consola(
-                m=args.m,
-                n=args.n,
-                k=args.k,
-                num_robots=args.robots,
-                max_pasos=args.pasos,
-                estrategia=args.estrategia,
-                semilla=args.semilla,
-                animado=True
-            )
+
+def ejecutar_simulacion(semilla=42, verbose=True):
+    """Ejecuta una corrida de la simulación e imprime las métricas de la actividad."""
+    params = {**PARAMETROS, 'seed': semilla}
+    modelo = AlmacenModelo(params)
+
+    if verbose:
+        print("\n" + "=" * 65)
+        print("🤖 TC2008B - PARTE 1: SISTEMAS MULTIAGENTES (AgentPy)")
+        print("=" * 65)
+        print(f"  • Dimensiones del almacén : {params['M']} x {params['N']} celdas")
+        print(f"  • Cajas iniciales (K)     : {params['K']} a nivel de piso (sin pilas)")
+        print(f"  • Flota de robots         : {params['robots']} omnidireccionales")
+        print(f"  • Límite por pila         : {MAX_PILA} cajas máximo")
+        print(f"  • Semilla aleatoria       : {semilla}")
+        print("=" * 65)
+
+    # Ejecutar simulación
+    modelo.run(display=False)
+
+    exito = modelo.tiempo_finalizacion is not None
+    tiempo = modelo.tiempo_finalizacion or modelo.t
+    movs_totales = modelo.movimientos_totales()
+    pilas_llenas = modelo.pilas_completas()
+    pilas_esperadas = modelo.K // MAX_PILA
+
+    if verbose:
+        print("\n" + "=" * 65)
+        print("📊 RESULTADOS FINALES DE LA SIMULACIÓN")
+        print("=" * 65)
+        print(f"  • Misión completada       : {'✅ SÍ' if exito else '❌ NO (alcanzó tiempo máximo)'}")
+        print(f"  • Tiempo necesario (pasos): {tiempo} pasos")
+        print(f"  • Movimientos totales     : {movs_totales} movimientos")
+        print(f"  • Movimientos promedio/caja: {round(movs_totales / modelo.K, 2)}")
+        print(f"  • Pilas de 5 completadas  : {pilas_llenas} de {pilas_esperadas}")
+        print("-" * 65)
+        print("  Desglose individual por robot:")
+        for r in modelo.robots:
+            print(f"    • Robot {r.numero}: {r.movimientos} movimientos")
+        print("=" * 65 + "\n")
+
+    return {
+        'exito': exito,
+        'tiempo': tiempo,
+        'movimientos': movs_totales,
+        'pilas_completas': pilas_llenas,
+    }
+
 
 if __name__ == "__main__":
-    main()
+    semilla = int(sys.argv[1]) if len(sys.argv) > 1 else 42
+    ejecutar_simulacion(semilla=semilla)
+
